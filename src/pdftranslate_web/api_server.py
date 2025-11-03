@@ -280,8 +280,76 @@ async def root():
     }
 
 def start_server(host: Optional[str] = None, port: Optional[int] = None):
+    # 预先加载TikToken以避免运行时网络请求
+    logger.info("正在预加载TikToken模型...")
+    try:
+        import tiktoken
+        # 预加载o200k_base编码器（GPT-4o使用的编码）
+        tiktoken.get_encoding("o200k_base")
+        logger.info("TikToken模型预加载成功")
+    except Exception as e:
+        logger.warning(f"TikToken模型预加载失败: {e}")
+        # 尝试使用备用方法
+        try:
+            import tiktoken
+            tiktoken.encoding_for_model("gpt-4o")
+            logger.info("TikToken GPT-4o编码器预加载成功")
+        except Exception as e2:
+            logger.error(f"TikToken备用加载也失败: {e2}")
+
+    # 预先加载BabelDOC字体缓存以避免运行时网络超时
+    logger.info("正在预加载字体缓存...")
+    try:
+        from babeldoc.assets import assets
+        import asyncio
+        import os
+
+        # 检查字体缓存
+        font_cache_dir = os.path.expanduser("~/.cache/babeldoc/fonts")
+        if os.path.exists(font_cache_dir):
+            font_count = len([f for f in os.listdir(font_cache_dir) if f.endswith('.ttf')])
+            logger.info(f"发现 {font_count} 个字体文件在缓存中")
+
+            # 预加载关键字体以避免运行时下载
+            key_fonts = [
+                "NotoSans-Regular.ttf",
+                "NotoSans-Bold.ttf",
+                "NotoSerif-Regular.ttf",
+                "NotoSerif-Bold.ttf",
+                "SourceHanSansCN-Regular.ttf",
+                "SourceHanSansCN-Bold.ttf",
+                "SourceHanSerifCN-Regular.ttf",
+                "SourceHanSerifCN-Bold.ttf"
+            ]
+
+            async def preload_key_fonts():
+                loaded_count = 0
+                for font in key_fonts:
+                    try:
+                        # 尝试获取字体信息以触发缓存预热
+                        if hasattr(assets, 'get_font_and_metadata_async'):
+                            font_path, font_metadata = await assets.get_font_and_metadata_async(font)
+                            if font_path:
+                                loaded_count += 1
+                        elif hasattr(assets, 'get_font_and_metadata'):
+                            font_path, font_metadata = assets.get_font_and_metadata(font)
+                            if font_path:
+                                loaded_count += 1
+                    except Exception as font_error:
+                        logger.debug(f"字体 {font} 预加载失败: {font_error}")
+                        pass
+                return loaded_count
+
+            loaded = asyncio.run(preload_key_fonts())
+            logger.info(f"字体预加载完成，成功预加载 {loaded} 个字体文件")
+        else:
+            logger.warning("字体缓存目录不存在，运行时将下载字体")
+    except Exception as e:
+        logger.warning(f"字体缓存预加载失败: {e}")
+        logger.info("字体将在运行时动态加载")
+
     babeldoc.format.pdf.high_level.init()
-    
+
     logging.basicConfig(level=logging.INFO)
     logging.getLogger("httpx").setLevel("WARNING")
     logging.getLogger("openai").setLevel("WARNING")

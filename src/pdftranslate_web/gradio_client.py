@@ -23,28 +23,7 @@ class GradioClient:
         # 获取项目根目录路径
         self.project_root = Path(__file__).parent.parent.parent
         self.sample_file_path = self.project_root / "simaple" / "11.pdf"
-        # 配置缓存
-        self.config_cache = {
-            "openai_api_key": "",
-            "openai_model": "",
-            "openai_base_url": ""
-        }
         
-    def update_config(self, api_key: str = None, model: str = None, base_url: str = None) -> str:
-        """更新配置缓存"""
-        if api_key is not None:
-            self.config_cache["openai_api_key"] = api_key
-        if model is not None:
-            self.config_cache["openai_model"] = model
-        if base_url is not None:
-            self.config_cache["openai_base_url"] = base_url
-        return "✅ 配置已更新（下次翻译时生效）"
-    
-    def get_masked_api_key(self, api_key: str) -> str:
-        """获取遮蔽的API密钥"""
-        if not api_key or len(api_key) < 8:
-            return api_key
-        return api_key[:4] + "*" * (len(api_key) - 8) + api_key[-4:]
         
     def check_server_status(self) -> Tuple[str, Dict]:
         """检查服务器状态和配置"""
@@ -53,14 +32,6 @@ class GradioClient:
                 return "❌ 服务器离线", {}
             
             config = self.client.get_server_config()
-            
-            # 更新配置缓存为服务器当前值
-            if not self.config_cache["openai_api_key"]:
-                self.config_cache["openai_api_key"] = "sk-****"  # 默认占位符
-            if not self.config_cache["openai_model"]:
-                self.config_cache["openai_model"] = config['config']['openai_model']
-            if not self.config_cache["openai_base_url"]:
-                self.config_cache["openai_base_url"] = ""  # 服务器不返回base_url
             
             status_text = f"""✅ 服务器在线
             
@@ -259,51 +230,13 @@ def create_gradio_interface(server_url: str = "http://localhost:8000"):
         .preview-container { height: 600px; overflow-y: auto; }
         .status-box { background-color: #f8f9fa; padding: 15px; border-radius: 8px; }
         
-        /* 表格样式配置 */
-        .config-table {
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            overflow: hidden;
-            margin: 16px 0;
-        }
-        .config-header-row {
-            background-color: #6366f1 !important;
-            margin: 0 !important;
-        }
-        .config-header { 
-            background-color: #6366f1; 
-            color: white; 
-            padding: 12px 16px; 
-            margin: 0; 
-            text-align: center;
-            font-weight: bold;
-            border-right: 1px solid #5b63d4;
-        }
-        .config-row { 
-            border-bottom: 1px solid #e5e7eb; 
-            padding: 12px 16px; 
-            margin: 0 !important;
-            background-color: white;
-        }
-        .config-row:hover { 
-            background-color: #f8fafc; 
-        }
-        .config-row:last-child {
-            border-bottom: none;
-        }
-        .config-actions {
-            background-color: #f9fafb;
-            padding: 16px;
-            border-top: 1px solid #e5e7eb;
-            margin: 0 !important;
-        }
-        .config-status {
-            background-color: #f0f9ff;
-            padding: 12px 16px;
-            border-radius: 6px;
-            border-left: 4px solid #3b82f6;
-            margin: 16px 0;
-        }
+        /* 隐藏Gradio底部标志 */
+        .footer { display: none !important; }
+        .gradio-container .footer { display: none !important; }
+        footer { display: none !important; }
+        .gradio-container footer { display: none !important; }
+        .gradio-container .gradio-footer { display: none !important; }
+        .gradio-footer { display: none !important; }
         """
     ) as demo:
         
@@ -442,173 +375,11 @@ def create_gradio_interface(server_url: str = "http://localhost:8000"):
                         elem_classes=["status-box"]
                     )
 
-            with gr.TabItem("⚙️ 参数设置"):
-                gr.Markdown("### 🔧 核心API配置")
-                gr.Markdown("在此修改OpenAI API配置，修改后立即生效于下次翻译任务。")
-                
-                # 用于跟踪当前会话是否已认证的内部状态
-                session_authenticated = gr.State(False)
-                
-                # 管理员认证模块
-                with gr.Group() as auth_group:
-                    gr.Markdown("#### **管理员认证**")
-                    admin_password_input = gr.Textbox(
-                        label="请输入管理员密码以查看或修改敏感配置",
-                        type="password",
-                        placeholder=f"默认密码是 'admin123'，或通过环境变量 ADMIN_PASSWORD 进行设置"
-                    )
-                    unlock_button = gr.Button("🔓 解锁", variant="primary")
-                
-                # 将所有需要被锁定的组件收集到一个列表中
-                interactive_settings_components = []
-                
-                # 表格样式的配置界面
-                with gr.Group(elem_classes=["config-table"]):
-                    # 表格头部
-                    with gr.Row(elem_classes=["config-header-row"]):
-                        with gr.Column(scale=1):
-                            gr.HTML("<div class='config-header'>配置项</div>")
-                        with gr.Column(scale=2):
-                            gr.HTML("<div class='config-header'>当前值</div>")
-                        with gr.Column(scale=1):
-                            gr.HTML("<div class='config-header'>操作</div>")
-                    
-                    # API Key 行
-                    with gr.Row(elem_classes=["config-row"]):
-                        with gr.Column(scale=1):
-                            gr.Markdown("**OpenAI API Key**")
-                        with gr.Column(scale=2):
-                            api_key_input = gr.Textbox(
-                                placeholder="输入你的API密钥",
-                                type="password",
-                                container=False,
-                                show_label=False,
-                                interactive=False
-                            )
-                            interactive_settings_components.append(api_key_input)
-                        with gr.Column(scale=1):
-                            show_api_key_btn = gr.Button("👁 显示", size="sm", interactive=False)
-                            interactive_settings_components.append(show_api_key_btn)
-                    
-                    # 模型名称行
-                    with gr.Row(elem_classes=["config-row"]):
-                        with gr.Column(scale=1):
-                            gr.Markdown("**模型名称**")
-                        with gr.Column(scale=2):
-                            model_input = gr.Textbox(
-                                placeholder="如: deepseek-ai/DeepSeek-V3",
-                                container=False,
-                                show_label=False,
-                                interactive=False
-                            )
-                            interactive_settings_components.append(model_input)
-                        with gr.Column(scale=1):
-                            gr.HTML("<span></span>")  # 空占位符
-                    
-                    # Base URL 行
-                    with gr.Row(elem_classes=["config-row"]):
-                        with gr.Column(scale=1):
-                            gr.Markdown("**Base URL**")
-                        with gr.Column(scale=2):
-                            base_url_input = gr.Textbox(
-                                placeholder="如: https://api.siliconflow.cn/v1",
-                                container=False,
-                                show_label=False,
-                                interactive=False
-                            )
-                            interactive_settings_components.append(base_url_input)
-                        with gr.Column(scale=1):
-                            gr.HTML("<span></span>")  # 空占位符
-                    
-                    # 操作按钮行
-                    with gr.Row(elem_classes=["config-actions"]):
-                        save_config_btn = gr.Button(
-                            "💾 保存配置",
-                            variant="primary",
-                            size="sm",
-                            interactive=False
-                        )
-                        interactive_settings_components.append(save_config_btn)
-                        
-                # 配置状态显示
-                config_status = gr.Markdown("等待配置...", elem_classes=["config-status"])
-                
-                # 创建一个 State 来传递需要解锁的组件数量
-                num_components = gr.State(len(interactive_settings_components))
         
         def update_server_status():
             status_text, config = gradio_client.check_server_status()
             return status_text
         
-        def unlock_settings(password_attempt, num_components_to_unlock):
-            """
-            检查管理员密码。如果正确，解锁设置UI并隐藏认证模块。
-            """
-            if password_attempt == ADMIN_PASSWORD:
-                gr.Info("认证成功！设置已解锁。")
-                # 为每一个需要解锁的组件创建一个更新指令
-                unlock_updates = [gr.update(interactive=True) for _ in range(num_components_to_unlock)]
-                # 返回所有更新指令，以及对认证组和会话状态的更新
-                # The * operator unpacks the list into individual arguments for the tuple
-                return *unlock_updates, gr.update(visible=False), True
-            else:
-                # 密码错误时，通过 gr.Error 弹出提示，UI不会有任何变化
-                raise gr.Error("管理员密码错误！")
-        
-        def toggle_api_key_visibility(api_key_value):
-            """切换API密钥的显示/隐藏状态"""
-            # 根据当前值判断是否为隐藏状态
-            # 如果包含*号，则当前是遮蔽状态，需要显示原文
-            if api_key_value and "*" in api_key_value:
-                # 从缓存中获取原始值
-                original_key = gradio_client.config_cache.get('openai_api_key', '')
-                return gr.update(value=original_key, type="text")
-            else:
-                # 当前显示原文，需要遮蔽
-                if api_key_value:
-                    # 保存到缓存
-                    gradio_client.config_cache['openai_api_key'] = api_key_value
-                    masked_key = gradio_client.get_masked_api_key(api_key_value)
-                    return gr.update(value=masked_key, type="password")
-                else:
-                    return gr.update(type="password")
-        
-        def save_config(api_key, model, base_url):
-            """保存配置"""
-            status = gradio_client.update_config(api_key=api_key, model=model, base_url=base_url)
-            
-            # 从配置缓存生成当前配置显示
-            config_info = f"""**当前配置:**
-- API Key: {gradio_client.get_masked_api_key(gradio_client.config_cache['openai_api_key'])}
-- 模型: {gradio_client.config_cache['openai_model'] or '未设置'}
-- Base URL: {gradio_client.config_cache['openai_base_url'] or '未设置'}
-"""
-            return status + "\n\n" + config_info
-        
-        def load_config_from_server():
-            """从环境变量和服务器加载配置到输入框"""
-            import os
-            from dotenv import load_dotenv
-            
-            # 加载.env文件
-            load_dotenv()
-            
-            # 从环境变量读取配置
-            api_key = os.getenv("OPENAI_API_KEY", "")
-            model = os.getenv("OPENAI_MODEL", "")
-            base_url = os.getenv("OPENAI_BASE_URL", "")
-            
-            # 更新配置缓存
-            gradio_client.config_cache.update({
-                "openai_api_key": api_key,
-                "openai_model": model,
-                "openai_base_url": base_url
-            })
-            
-            # 返回遮蔽后的API Key和其他配置
-            masked_api_key = gradio_client.get_masked_api_key(api_key) if api_key else ""
-            
-            return masked_api_key, model, base_url
         
         # 定期更新服务器状态
         demo.load(update_server_status, outputs=[server_status])
@@ -664,32 +435,6 @@ def create_gradio_interface(server_url: str = "http://localhost:8000"):
             )
         
         # 绑定事件
-        # 管理员认证事件
-        unlock_button.click(
-            fn=unlock_settings,
-            inputs=[admin_password_input, num_components],
-            # outputs 列表现在包含所有被控制的组件、认证组和会话状态
-            outputs=interactive_settings_components + [auth_group, session_authenticated]
-        )
-        
-        # 配置相关事件
-        show_api_key_btn.click(
-            toggle_api_key_visibility,
-            inputs=[api_key_input],
-            outputs=[api_key_input]
-        )
-        
-        save_config_btn.click(
-            save_config,
-            inputs=[api_key_input, model_input, base_url_input],
-            outputs=[config_status]
-        )
-        
-        # 页面加载时从服务器加载配置
-        demo.load(
-            load_config_from_server,
-            outputs=[api_key_input, model_input, base_url_input]
-        )
         
         # 示例文件加载
         sample_btn.click(
