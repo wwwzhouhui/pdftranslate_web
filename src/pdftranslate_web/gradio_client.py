@@ -218,26 +218,26 @@ class GradioClient:
         except Exception as e:
             return None, [], f"❌ 加载示例文件失败: {str(e)}"
 
+CUSTOM_CSS = """
+.main-container { max-width: 1400px; margin: 0 auto; }
+.preview-container { height: 600px; overflow-y: auto; }
+.status-box { background-color: #f8f9fa; padding: 15px; border-radius: 8px; }
+
+/* 隐藏Gradio底部标志 */
+.footer { display: none !important; }
+.gradio-container .footer { display: none !important; }
+footer { display: none !important; }
+.gradio-container footer { display: none !important; }
+.gradio-container .gradio-footer { display: none !important; }
+.gradio-footer { display: none !important; }
+"""
+
 def create_gradio_interface(server_url: str = "http://localhost:8000"):
     """创建Gradio界面"""
     gradio_client = GradioClient(server_url)
-    
+
     with gr.Blocks(
-        title="pdftranslate PDF翻译工具",
-        theme=gr.themes.Soft(),
-        css="""
-        .main-container { max-width: 1400px; margin: 0 auto; }
-        .preview-container { height: 600px; overflow-y: auto; }
-        .status-box { background-color: #f8f9fa; padding: 15px; border-radius: 8px; }
-        
-        /* 隐藏Gradio底部标志 */
-        .footer { display: none !important; }
-        .gradio-container .footer { display: none !important; }
-        footer { display: none !important; }
-        .gradio-container footer { display: none !important; }
-        .gradio-container .gradio-footer { display: none !important; }
-        .gradio-footer { display: none !important; }
-        """
+        title="pdftranslate PDF翻译工具"
     ) as demo:
         
         gr.Markdown("""
@@ -320,7 +320,6 @@ def create_gradio_interface(server_url: str = "http://localhost:8000"):
                             columns=1,
                             rows=2,
                             height="400px",
-                            show_download_button=False,
                             interactive=False
                         )
                         
@@ -340,7 +339,6 @@ def create_gradio_interface(server_url: str = "http://localhost:8000"):
                             columns=1,
                             rows=2,
                             height="400px",
-                            show_download_button=False,
                             interactive=False
                         )
                         
@@ -488,7 +486,9 @@ def main():
         server_name=args.host,
         server_port=args.port,
         share=args.share,
-        show_error=True
+        show_error=True,
+        theme=gr.themes.Soft(),
+        css=CUSTOM_CSS
     )
 
 if __name__ == "__main__":
